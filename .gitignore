@@ -1,0 +1,23 @@
+# User-uploaded and generated files
+uploads/*
+!uploads/.gitkeep
+outputs/*
+!outputs/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+env/
+.env
+
+# OS
+.DS_Store
+Thumbs.db

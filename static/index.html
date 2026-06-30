@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VisionPlate — Vehicle Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0a0c0f; --surface:#111417; --border:#1e2530;
+    --accent:#00e5ff; --accent2:#ff6b35; --green:#00ff88;
+    --text:#dce8f0; --muted:#556070;
+    --mono:'Share Tech Mono',monospace; --sans:'Barlow',sans-serif;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+  .wrap{position:relative;z-index:1;max-width:960px;margin:0 auto;padding:0 24px 80px}
+  header{padding:40px 0 32px;display:flex;align-items:flex-end;gap:20px;border-bottom:1px solid var(--border);margin-bottom:48px}
+  .logo-mark{width:48px;height:48px;border:2px solid var(--accent);display:grid;place-items:center;font-family:var(--mono);font-size:20px;color:var(--accent);position:relative;flex-shrink:0}
+  .logo-mark::before{content:'';position:absolute;inset:4px;border:1px solid rgba(0,229,255,.3)}
+  h1{font-size:clamp(22px,4vw,36px);font-weight:900;letter-spacing:-.5px;line-height:1}
+  h1 span{color:var(--accent)}
+  .tagline{font-size:13px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:4px}
+  .drop-zone{border:2px dashed var(--border);border-radius:4px;padding:64px 32px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative;overflow:hidden}
+  .drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:rgba(0,229,255,.03)}
+  .drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+  .drop-icon{font-size:48px;margin-bottom:16px;filter:grayscale(1) opacity(.5);transition:filter .2s}
+  .drop-zone:hover .drop-icon{filter:none}
+  .drop-title{font-size:18px;font-weight:700;margin-bottom:8px}
+  .drop-sub{font-size:13px;color:var(--muted)}
+  .drop-sub strong{color:var(--accent);font-weight:600}
+  #file-preview{display:none;margin-top:16px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:13px;color:var(--accent);align-items:center;gap:10px}
+  #file-preview.show{display:flex}
+  #file-preview .fname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #file-preview .fsize{color:var(--muted);flex-shrink:0}
+
+  /* OCR toggle */
+  .ocr-row{display:flex;align-items:center;gap:12px;margin-top:20px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:4px}
+  .ocr-row label{font-size:13px;color:var(--text);cursor:pointer;flex:1}
+  .ocr-row .note{font-size:11px;color:var(--muted);display:block;margin-top:2px}
+  .toggle{position:relative;width:40px;height:22px;flex-shrink:0}
+  .toggle input{opacity:0;width:0;height:0}
+  .slider{position:absolute;inset:0;background:#222;border-radius:22px;transition:.3s;cursor:pointer}
+  .slider::before{content:'';position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:var(--muted);border-radius:50%;transition:.3s}
+  .toggle input:checked+.slider{background:rgba(0,229,255,.25);border:1px solid var(--accent)}
+  .toggle input:checked+.slider::before{transform:translateX(18px);background:var(--accent)}
+
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;background:var(--accent);color:#000;font-family:var(--sans);font-weight:700;font-size:14px;letter-spacing:1px;text-transform:uppercase;border:none;border-radius:2px;cursor:pointer;transition:background .15s,transform .1s;margin-top:24px}
+  .btn:hover{background:#33eeff}
+  .btn:active{transform:scale(.98)}
+  .btn:disabled{background:var(--muted);cursor:not-allowed;color:#333}
+
+  #progress-section{display:none;margin-top:40px}
+  #progress-section.show{display:block}
+  .progress-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+  .phase-label{font-family:var(--mono);font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:2px}
+  .eta-label{font-family:var(--mono);font-size:12px;color:var(--accent)}
+  .progress-bar-wrap{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:6px}
+  .progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:3px;width:0%;transition:width .4s ease}
+  .progress-pct{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right}
+
+  /* speed chips */
+  .speed-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .chip{font-family:var(--mono);font-size:11px;padding:4px 10px;border-radius:2px;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--muted)}
+  .chip.on{border-color:rgba(0,255,136,.3);color:var(--green);background:rgba(0,255,136,.05)}
+
+  #results-section{display:none;margin-top:48px}
+  #results-section.show{display:block}
+  .section-title{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+  .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;margin-bottom:32px}
+  .stat-card{background:var(--surface);border:1px solid var(--border);padding:20px 16px;border-radius:4px;position:relative;overflow:hidden}
+  .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+  .stat-card.in::before{background:var(--green)}
+  .stat-card.out::before{background:var(--accent2)}
+  .stat-card.plates::before{background:var(--accent)}
+  .stat-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .stat-value{font-size:36px;font-weight:900;line-height:1;font-family:var(--mono)}
+  .stat-card.in .stat-value{color:var(--green)}
+  .stat-card.out .stat-value{color:var(--accent2)}
+  .stat-card.plates .stat-value{color:var(--accent);font-size:24px}
+  .plates-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .plate-tag{background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.25);color:var(--accent);font-family:var(--mono);font-size:13px;padding:4px 10px;border-radius:2px;letter-spacing:1px}
+  #result-media{margin-top:24px}
+  #result-media img,#result-media video{width:100%;border-radius:4px;border:1px solid var(--border);display:block}
+  .dl-btn{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--accent);font-family:var(--mono);text-decoration:none;padding:8px 14px;border:1px solid rgba(0,229,255,.3);border-radius:2px;transition:background .15s}
+  .dl-btn:hover{background:rgba(0,229,255,.08)}
+  .error-box{display:none;margin-top:24px;padding:16px;background:rgba(255,60,60,.08);border:1px solid rgba(255,60,60,.3);border-radius:4px;color:#ff6060;font-family:var(--mono);font-size:13px}
+  .error-box.show{display:block}
+  .scan-wrap{position:relative}
+  .scan-line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scan 2s ease-in-out 3;pointer-events:none}
+  @keyframes scan{0%{top:0;opacity:1}90%{top:100%;opacity:.5}100%{top:100%;opacity:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo-mark">VP</div>
+    <div>
+      <h1>Vision<span>Plate</span></h1>
+      <div class="tagline">Vehicle detection &amp; plate recognition</div>
+    </div>
+  </header>
+
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.bmp,.webp,.mp4,.avi,.mov,.mkv,.wmv">
+    <div class="drop-icon">🚗</div>
+    <div class="drop-title">Drop your file here</div>
+    <div class="drop-sub">Images: JPG, PNG &nbsp;|&nbsp; Videos: MP4, AVI, MOV<br>
+      <strong>Max 200 MB</strong>
+    </div>
+  </div>
+
+  <div id="file-preview">
+    <span>📎</span>
+    <span class="fname" id="fname">—</span>
+    <span class="fsize" id="fsize">—</span>
+  </div>
+
+  <div class="ocr-row" id="ocr-row" style="display:none">
+    <label for="ocr-toggle">
+      Enable plate OCR
+      <span class="note" id="ocr-note">Reads number plates — adds significant time for video</span>
+    </label>
+    <label class="toggle">
+      <input type="checkbox" id="ocr-toggle">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <button class="btn" id="run-btn" disabled onclick="runDetection()">▶ &nbsp;Run Detection</button>
+
+  <div class="error-box" id="error-box"></div>
+
+  <div id="progress-section">
+    <div class="progress-header">
+      <div class="phase-label" id="phase-label">Initialising…</div>
+      <div class="eta-label"   id="eta-label"></div>
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="bar-fill"></div>
+    </div>
+    <div class="progress-pct" id="bar-pct">0%</div>
+    <div class="speed-chips">
+      <div class="chip on">YOLO every 3rd frame</div>
+      <div class="chip" id="chip-ocr">OCR disabled</div>
+      <div class="chip on">640px inference</div>
+    </div>
+  </div>
+
+  <div id="results-section">
+    <div class="section-title">Detection Results</div>
+    <div class="stats-row">
+      <div class="stat-card in"><div class="stat-label">Vehicles In</div><div class="stat-value" id="cnt-in">—</div></div>
+      <div class="stat-card out"><div class="stat-label">Vehicles Out</div><div class="stat-value" id="cnt-out">—</div></div>
+      <div class="stat-card plates">
+        <div class="stat-label">Plates Found</div>
+        <div class="stat-value" id="cnt-plates">—</div>
+        <div class="plates-list" id="plates-list"></div>
+      </div>
+    </div>
+    <div id="result-media"></div>
+  </div>
+</div>
+
+<script>
+  const dropZone = document.getElementById("drop-zone");
+  const fileInput = document.getElementById("file-input");
+  const runBtn    = document.getElementById("run-btn");
+  const ocrToggle = document.getElementById("ocr-toggle");
+  const ocrNote   = document.getElementById("ocr-note");
+  const chipOcr   = document.getElementById("chip-ocr");
+  let selectedFile = null, fileKind = null;
+
+  dropZone.addEventListener("dragover",  e=>{e.preventDefault();dropZone.classList.add("drag-over")});
+  dropZone.addEventListener("dragleave", ()=>dropZone.classList.remove("drag-over"));
+  dropZone.addEventListener("drop", e=>{e.preventDefault();dropZone.classList.remove("drag-over");if(e.dataTransfer.files[0])setFile(e.dataTransfer.files[0])});
+  fileInput.addEventListener("change", ()=>{if(fileInput.files[0])setFile(fileInput.files[0])});
+
+  const IMG_EXT = new Set([".jpg",".jpeg",".png",".bmp",".webp"]);
+  function setFile(f){
+    selectedFile = f;
+    const ext = f.name.slice(f.name.lastIndexOf(".")).toLowerCase();
+    fileKind = IMG_EXT.has(ext) ? "image" : "video";
+    document.getElementById("fname").textContent = f.name;
+    document.getElementById("fsize").textContent = (f.size/1024/1024).toFixed(1)+" MB";
+    document.getElementById("file-preview").classList.add("show");
+    document.getElementById("ocr-row").style.display = "flex";
+    ocrNote.textContent = fileKind==="image"
+      ? "Reads number plates — fast for images"
+      : "Reads number plates — adds significant time for video";
+    runBtn.disabled = false;
+    hide("results-section"); hide("progress-section"); hide("error-box");
+  }
+
+  ocrToggle.addEventListener("change", ()=>{
+    chipOcr.textContent = ocrToggle.checked ? "OCR enabled" : "OCR disabled";
+    chipOcr.classList.toggle("on", ocrToggle.checked);
+  });
+
+  function show(id){document.getElementById(id).classList.add("show")}
+  function hide(id){document.getElementById(id).classList.remove("show")}
+  function setBar(pct){
+    document.getElementById("bar-fill").style.width = pct+"%";
+    document.getElementById("bar-pct").textContent  = pct+"%";
+  }
+
+  async function runDetection(){
+    if(!selectedFile) return;
+    runBtn.disabled = true;
+    hide("results-section"); hide("error-box");
+    show("progress-section");
+    setBar(0);
+    document.getElementById("phase-label").textContent = "Uploading…";
+    document.getElementById("eta-label").textContent = "";
+
+    const fd = new FormData();
+    fd.append("file", selectedFile);
+    fd.append("ocr",  ocrToggle.checked ? "1" : "0");
+
+    let jobId, kind;
+    try{
+      const r = await fetch("/upload",{method:"POST",body:fd});
+      const d = await r.json();
+      if(d.error) throw new Error(d.error);
+      jobId=d.job_id; kind=d.kind;
+    }catch(e){showError(e.message);runBtn.disabled=false;return}
+
+    document.getElementById("phase-label").textContent = "Loading models…";
+    setBar(5);
+    poll(jobId, kind);
+  }
+
+  function poll(jobId, kind){
+    const iv = setInterval(async()=>{
+      const r = await fetch("/status/"+jobId);
+      const d = await r.json();
+      if(d.status==="running"){
+        document.getElementById("phase-label").textContent = "Processing…";
+        document.getElementById("eta-label").textContent   = d.eta || "";
+        setBar(Math.max(10, d.progress));
+      }
+      if(d.status==="done"){
+        clearInterval(iv);
+        setBar(100);
+        document.getElementById("phase-label").textContent = "Done ✓";
+        document.getElementById("eta-label").textContent   = "";
+        showResults(d, kind);
+        runBtn.disabled = false;
+      }
+      if(d.status==="error"){
+        clearInterval(iv);
+        showError(d.error||"Unknown error");
+        runBtn.disabled=false;
+      }
+    }, 600);
+  }
+
+  function showResults(d, kind){
+    document.getElementById("cnt-in").textContent    = d.counts?.in  ?? 0;
+    document.getElementById("cnt-out").textContent   = d.counts?.out ?? 0;
+    const plates = d.plates||[];
+    document.getElementById("cnt-plates").textContent = plates.length;
+    document.getElementById("plates-list").innerHTML  = plates.map(p=>`<span class="plate-tag">${p}</span>`).join("");
+    const url = "/result/"+d.result;
+    const md  = document.getElementById("result-media");
+    if(kind==="image"){
+      md.innerHTML=`<div class="scan-wrap"><img src="${url}" alt="Result"><div class="scan-line"></div></div><a class="dl-btn" href="${url}" download>⬇ Download image</a>`;
+    }else{
+      md.innerHTML=`<video src="${url}" controls playsinline></video><a class="dl-btn" href="${url}" download>⬇ Download video</a>`;
+    }
+    show("results-section");
+  }
+
+  function showError(msg){
+    const b=document.getElementById("error-box");
+    b.textContent="⚠ "+msg; b.classList.add("show");
+    hide("progress-section");
+  }
+</script>
+</body>
+</html>
